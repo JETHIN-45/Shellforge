@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 typedef struct {
     char *args[64];
@@ -10,7 +12,6 @@ typedef struct {
 
 void parse_command(char *line, Command *cmd) {
     cmd->count = 0;
-
     char *token = strtok(line, " \t");
 
     while (token != NULL && cmd->count < 63) {
@@ -24,34 +25,63 @@ void parse_command(char *line, Command *cmd) {
 int main(void) {
     char *line = NULL;
     size_t len = 0;
-    ssize_t nread;
     Command cmd;
 
     while (1) {
         printf("shellforge$ ");
         fflush(stdout);
 
-        nread = getline(&line, &len, stdin);
-        if (nread == -1)
+        if (getline(&line, &len, stdin) == -1)
             break;
 
-        if (nread > 0 && line[nread - 1] == '\n')
-            line[nread - 1] = '\0';
+        line[strcspn(line, "\n")] = '\0';
 
-        parse_command(line, &cmd);
+        char *args[64];
+        int i = 0;
+        char *token = strtok(line, " \t");
 
-        if (cmd.count == 0)
+        while (token != NULL && i < 63) {
+            args[i++] = token;
+            token = strtok(NULL, " \t");
+        }
+
+        args[i] = NULL;
+
+        if (i == 0)
             continue;
 
-        if (strcmp(cmd.args[0], "exit") == 0)
+        if (strcmp(args[0], "exit") == 0)
             break;
 
-        printf("Structure Log -> command: %s | Arguments found: %d\n",
-               cmd.args[0], cmd.count - 1);
+        printf("Command detected: %s | Arguments found: %d\n",
+               args[0], i - 1);
 
-        for (int j = 0; j < cmd.count; j++) {
-            printf(" -> args[%d]: %s\n", j, cmd.args[j]);
+        pid_t pid = fork();
+
+        if (pid == 0) {
+            execvp(args[0], args);
+            perror("Command execution error");
+            _exit(127);
+        } else if (pid > 0) {
+            waitpid(pid, NULL, 0);
+        } else {
+            perror("Fork creation error");
         }
+
+        char *log_line = strdup(line);
+        if (log_line == NULL) {
+            perror("strdup");
+            continue;
+        }
+
+        parse_command(log_line, &cmd);
+
+        if (cmd.count > 0) {
+            printf("Structure Log -> command: %s | Arguments found: %d\n",
+                   cmd.args[0], cmd.count - 1);
+        }
+
+        free(log_line);
     }
 
     free(line);
