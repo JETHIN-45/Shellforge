@@ -3,53 +3,54 @@
 #include <string.h>
 #include <sys/types.h>
 
+typedef struct {
+    char *args[64];
+    int count;
+} Command;
+
+void parse_command(char *line, Command *cmd) {
+    cmd->count = 0;
+
+    char *token = strtok(line, " \t");
+
+    while (token != NULL && cmd->count < 63) {
+        cmd->args[cmd->count++] = token;
+        token = strtok(NULL, " \t");
+    }
+
+    cmd->args[cmd->count] = NULL;
+}
+
 int main(void) {
     char *line = NULL;
     size_t len = 0;
     ssize_t nread;
-    char *args[64];
+    Command cmd;
 
     while (1) {
         printf("shellforge$ ");
         fflush(stdout);
 
         nread = getline(&line, &len, stdin);
-
-        if (nread == -1) {
-            printf("\nExiting cleanly...\n");
+        if (nread == -1)
             break;
-        }
 
-        if (nread > 0 && line[nread - 1] == '\n') {
+        if (nread > 0 && line[nread - 1] == '\n')
             line[nread - 1] = '\0';
-        }
 
-        if (strcmp(line, "exit") == 0) {
-            break;
-        }
+        parse_command(line, &cmd);
 
-        int i = 0;
-        char *token = strtok(line, " \t");
-
-        while (token != NULL && i < 63) {
-            args[i++] = token;
-            token = strtok(NULL, " \t");
-        }
-
-        args[i] = NULL;
-
-        if (i == 0) {
+        if (cmd.count == 0)
             continue;
-        }
 
-        if (strcmp(args[0], "exit") == 0) {
+        if (strcmp(cmd.args[0], "exit") == 0)
             break;
-        }
 
-        printf("Command detected: %s (Total args: %d)\n", args[0], i - 1);
+        printf("Structure Log -> command: %s | Arguments found: %d\n",
+               cmd.args[0], cmd.count - 1);
 
-        for (int j = 0; j < i; j++) {
-            printf(" -> args[%d]: %s\n", j, args[j]);
+        for (int j = 0; j < cmd.count; j++) {
+            printf(" -> args[%d]: %s\n", j, cmd.args[j]);
         }
     }
 
